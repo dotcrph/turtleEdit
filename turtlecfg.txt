@@ -1,0 +1,30 @@
+@ Default
+
+@ Window
+rootGeometry = '1600x900'
+rootFullscreen = False
+
+@ Text
+textBg = '#000000'
+textFg = '#FFFFFF'
+textFont = 'Consolas'
+textFontSize = 16
+textRelief = 'flat'
+
+@ Text cursor
+insertColor = '#85CB33'
+insertWidth = 3
+
+@ Lines numbers
+linesOnLeft = True
+linesBg = '#000000'
+linesFg = '#3D3D3D'
+linesRelief = 'flat'
+
+@ Footer
+enableFooter = True
+footerBg = '#85CB33'
+footerFg = '#000000'
+footerFont = 'Consolas'
+footerFontSize = 16
+footerRelief = 'flat'

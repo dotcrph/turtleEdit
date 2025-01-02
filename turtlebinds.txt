@@ -1,0 +1,17 @@
+@ Editor exiting
+<Control-q> = 'quitWithoutSave'
+<Escape> = 'quitWithSave'
+
+@ File manipulations
+<Control-f> = 'openFile'
+<Control-s> = 'saveFile'
+<Control-g> = 'saveAsFile'
+<Control-n> = 'clearFile'
+
+@ Text size
+<Control-[> = 'decreaseTextSize'
+<Control-]> = 'increaseTextSize'
+
+@ Misc
+<Control-w> = 'clearLogMessage'
+<F11> = 'changeFullscreen'
