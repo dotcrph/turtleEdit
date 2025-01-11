@@ -1,6 +1,6 @@
 @ Editor exiting
-<Control-q> = 'quitWithoutSave'
-<Escape> = 'quitWithSave'
+<Control-q> = 'quitWithSave'
+<Escape> = 'quitWithoutSave'
 
 @ File manipulations
 <Control-f> = 'openFile'
@@ -14,4 +14,6 @@
 
 @ Misc
 <Control-w> = 'clearLogMessage'
+<F5> = 'reloadEditor'
+<F9> = 'loadConfig'
 <F11> = 'changeFullscreen'

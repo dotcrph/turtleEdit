@@ -1,18 +1,23 @@
 import tkinter as tk
 from tkinter.filedialog import askopenfilename, asksaveasfilename
-import turtlecfgparser as cfgparser
-import time
+from datetime import datetime
+from os import listdir
+from os.path import isfile, isdir, join
 import sys
-
+import turtlecfgparser as cfgparser
 
 # Widgets declaration
 root = tk.Tk()
+root.title('turtleEdit')
+
 text = tk.Text(root)
+
 lines = tk.Text(root)
+
 footer = tk.Label(root)
 
 # Variables declaration
-defaultConfig = {'rootGeometry': '1600x900', 
+defaultConfig = {'rootGeometry': '1600x900',
         'rootFullscreen': False, 
         'textBg': 'black', 
         'textFg': 'white', 
@@ -26,128 +31,170 @@ defaultConfig = {'rootGeometry': '1600x900',
         'linesFg': 'black',
         'linesRelief': 'flat',
         'enableFooter': True, 
-        'footerBg': 'white', 
+        'footerBg': 'white',
         'footerFg': 'black', 
         'footerFont': 'Consolas', 
         'footerFontSize': 16, 
-        'footerRelief': 'flat'}
-config = None
+        'footerRelief': 'flat',
+        'footerText': ['cursorPos', 'systemTime', 'openedFile', 'logMessage', 'appVersion'],
+        'footerTextSeparator': ' | ',
+        'footerTimeFormat': '%A %x %X'}
+userConfig = defaultConfig.copy()
 
 linesCount = 1
 linesCountPrev = 1
 
 logMessage = ''
-appVersion = 'turtleEdit 1.0'
+appVersion = 'turtleEdit 1.1.0'
 
 openedFile = None
-currentFullscreen = None 
+currentFullscreen = None
 currentTextSize = None
 
 # Constructor functions
 def setupConfig():
-    global config, defaultConfig, logMessage
+    # Read config file
     try:
         config = cfgparser.readConfig('turtlecfg.txt')
     except Exception as error:
         writeToLog(f'Invalid config! ({error})')
-        config = defaultConfig
+        return
 
-def readConfigValue(key, expectedType):
-    global defaultConfig, config, logMessage
-    
-    if key not in config.keys():
-        return defaultConfig[key]
+    # Change current config
+    for key, value in defaultConfig.items():
+        if not key in config:
+            if key in defaultConfig:
+                userConfig[key] = defaultConfig[key]
+            continue
 
-    value = config[key]
-    if type(value) is not expectedType:
-        writeToLog(f'Wrong value type in config! (key: {key}, type: {type(value)}, expected: {expectedType})')
-        return defaultConfig[key]
+        customValue = config[key]
+        if isinstance(customValue, type(value)):
+            userConfig[key] = config[key]
 
-    return value
+    # Clean footerText
+    filteredFooterText = []
+    for key in userConfig['footerText']:
+        if key in ('cursorPos', 'systemTime') or key in globals():
+            filteredFooterText.append(key)
+            continue
+        writeToLog(f'Invalid key {key} in \'footerText\'!')
+    userConfig['footerText'] = filteredFooterText
 
 def configureWidgets():
-    global root, text, lines, footer, currentFullscreen, currentTextSize
+    global currentFullscreen, currentTextSize
 
     # Root
-    root.title('turtleEdit')
-    root.geometry(readConfigValue('rootGeometry', str))
+    root.geometry(userConfig['rootGeometry'])
     try:
         root.iconbitmap('turtleicon.ico')
-    except: 
+    except Exception:
         writeToLog('Invalid app icon!')
-    currentFullscreen = readConfigValue('rootFullscreen', bool)
+    currentFullscreen = userConfig['rootFullscreen']
     root.attributes('-fullscreen', currentFullscreen)
 
     # Text
     text.configure(yscrollcommand=updateTextScroll)
-    currentTextSize = readConfigValue('textFontSize', int)
-    text.configure(bg=readConfigValue('textBg', str), fg=readConfigValue('textFg', str), 
-                   font=(readConfigValue('textFont', str), currentTextSize), wrap='none', relief=readConfigValue('textRelief', str))
-    text.configure(insertbackground=readConfigValue('insertColor', str), insertwidth=readConfigValue('insertWidth', int))
-    
+    currentTextSize = userConfig['textFontSize']
+    text.configure(bg=userConfig['textBg'],
+                   fg=userConfig['textFg'],
+                   font=(userConfig['textFont'], currentTextSize),
+                   relief=userConfig['textRelief'],
+                   wrap='none')
+    text.configure(insertbackground=userConfig['insertColor'],
+                   insertwidth=userConfig['insertWidth'])
+
     # Lines
-    updateLines(); lines.configure(state='normal'); lines.delete('1.0'); lines.configure(state='disabled')
-    lines.configure(yscrollcommand=updateTextScroll)
-    lines.configure(bg=readConfigValue('linesBg', str), fg=readConfigValue('linesFg', str), 
-                    font=(readConfigValue('textFont', str), currentTextSize), wrap='none', relief=readConfigValue('linesRelief', str))
+    lines.configure(bg=userConfig['linesBg'],
+                    fg=userConfig['linesFg'],
+                    font=(userConfig['textFont'], currentTextSize),
+                    relief=userConfig['linesRelief'],
+                    wrap='none')
 
     # Footer
     if footer:
         footer.configure(anchor='w')
-        footer.configure(bg=readConfigValue('footerBg', str), fg=readConfigValue('footerFg', str),
-                        font=(readConfigValue('footerFont', str), readConfigValue('footerFontSize', int)), 
-                        relief=readConfigValue('footerRelief', str))
+        footer.configure(bg=userConfig['footerBg'],
+                        fg=userConfig['footerFg'],
+                        font=(userConfig['footerFont'], userConfig['footerFontSize']),
+                        relief=userConfig['footerRelief'])
+        updateFooter()
 
 def initializeWidgets():
-    global root, text, lines, footer
-
     root.rowconfigure(0, weight=1)
 
-    if readConfigValue('linesOnLeft', bool):
+    if userConfig['linesOnLeft']:
+        root.columnconfigure(0, weight=0)
         root.columnconfigure(1, weight=1)
         text.grid(row=0, column=1, sticky='news')
         lines.grid(row=0, column=0, sticky='ns')
     else:
         root.columnconfigure(0, weight=1)
+        root.columnconfigure(1, weight=0)
         text.grid(row=0, column=0, sticky='news')
         lines.grid(row=0, column=1, sticky='ns')
 
-    if readConfigValue('enableFooter', bool):
+    if userConfig['enableFooter']:
         footer.grid(row=1, column=0, columnspan=2, sticky='news')
 
 
 # Utility functions
-def openFile(_):
-    global root, text, openedFile, logMessage
+def reloadEditor(_):
+    setupConfig()
 
-    openedFile = askopenfilename(filetypes=[('Text Files', "*")])
-    if not openedFile: return
+    text.grid_forget()
+    lines.grid_forget()
+    footer.grid_forget()
+
+    configureWidgets()
+    initializeWidgets()
+    writeToLog('Reloaded config')
+    updateFooter()
+
+def loadConfig(_):
+    newConfigFile = askopenfilename(filetypes=[('Text Files', "*")])
+    if not newConfigFile:
+        return
+
+    try:
+        with open('turtlecfg.txt', 'w', encoding='utf-8') as oldConfig:
+            with open(newConfigFile, 'r', encoding='utf-8') as newConfig:
+                oldConfig.write(newConfig.read())
+    except Exception as error:
+        writeToLog(f'Failed to load config! ({error})')
+        return
+
+    reloadEditor(_)
+
+def openFile(_):
+    global openedFile, logMessage
+
+    fileToOpen = askopenfilename(filetypes=[('Text Files', "*")])
+    if not fileToOpen:
+        return
 
     text.delete(1.0, tk.END)
     try:
-        with open(openedFile, 'r') as file:
+        with open(fileToOpen, 'r', encoding='utf-8') as file:
             text.insert(tk.END, file.read())
     except Exception as error:
         writeToLog(f'Invalid file! ({error})')
         openedFile = None
         root.title('turtleEdit')
     else:
-        text.delete('end-2c', 'end') # Deletes extra line
+        openedFile = fileToOpen
         root.title(f'turtleEdit - {openedFile}')
         logMessage = ''
         updateFooter()
-    
+
     updateLines()
 
 def saveFile(_):
-    global root, text, openedFile, logMessage
-
-    if not openedFile: 
+    if not openedFile:
         saveAsFile(_)
         return
-    
+
     try:
-        with open(openedFile, 'w') as file:
+        with open(openedFile, 'w', encoding='utf-8') as file:
             file.write(text.get(1.0, tk.END))
     except Exception as error:
         writeToLog(f'Failed saving file! ({error})')
@@ -156,13 +203,15 @@ def saveFile(_):
         writeToLog('File saved successfully!')
 
 def saveAsFile(_):
-    global root, text, openedFile, logMessage
+    global openedFile
 
     saveAsFilepath = asksaveasfilename(filetypes=[('Text Files', "*")])
-    if not saveAsFilepath: return
+
+    if not saveAsFilepath:
+        return
 
     try:
-        with open(saveAsFilepath, 'w') as file:
+        with open(saveAsFilepath, 'w', encoding='utf-8') as file:
             file.write(text.get(1.0, tk.END))
     except Exception as error:
         writeToLog(f'Failed saving file! ({error})')
@@ -172,7 +221,7 @@ def saveAsFile(_):
         writeToLog('File saved successfully!')
 
 def clearFile(_):
-    global root, text, openedFile, logMessage
+    global openedFile
 
     saveAsFile(_)
     text.delete(1.0, tk.END)
@@ -204,7 +253,7 @@ def increaseTextSize(_):
     global currentTextSize
 
     currentTextSize += 1
-    currentFont = readConfigValue('textFont', str)
+    currentFont = userConfig['textFont']
 
     text.configure(font=(currentFont, currentTextSize))
     lines.configure(font=(currentFont, currentTextSize))
@@ -213,7 +262,7 @@ def decreaseTextSize(_):
     global currentTextSize
 
     currentTextSize -= 1
-    currentFont = readConfigValue('textFont', str)
+    currentFont = userConfig['textFont']
 
     text.configure(font=(currentFont, currentTextSize))
     lines.configure(font=(currentFont, currentTextSize))
@@ -228,7 +277,7 @@ def setText(t, val):
     t.insert(tk.END, val)
 
 def updateLines():
-    global linesCount, linesCountPrev, lines
+    global linesCount, linesCountPrev
     linesCount = text.index('end-1c')
     linesCount = int(linesCount[:linesCount.find('.')])+1
     linesDiff = linesCount-linesCountPrev
@@ -246,32 +295,39 @@ def updateLines():
     updateTextScroll(None,None)
 
 def updateFooter():
-    global text, logMessage, footer
-
-    if not footer: 
-        return
-
-    cursorPos = text.index(tk.INSERT)
-    systemTime = time.strftime('%I:%M:%S')
-
-    footerText = f'{cursorPos} | {systemTime}'
-    if openedFile: footerText += f' | {openedFile}'
-    if logMessage: footerText += f' | {logMessage}'
-    footerText += f' | {appVersion}'
-
-    footer.configure(text=footerText)
-
-def updateFooterLoop():
-    global footer
-
     if not footer:
         return
 
+    cursorPos = text.index(tk.INSERT)
+    systemTime = datetime.now().strftime(userConfig['footerTimeFormat'])
+
+    values = []
+    for key in userConfig['footerText']:
+        try:
+            value = eval(key)
+        except Exception as error:
+            print(f'Invalid key {key} in \'footerText\'! ({error})')
+
+        if (value is None) or (value == ''):
+            continue
+
+        values.append(value)
+
+    footerText = userConfig['footerTextSeparator'].join(values)
+    footer.configure(text=footerText)
+
+def updateFooterLoop():
+    if not footer:
+        return
+
+    if 'systemTime' not in userConfig['footerText']:
+        return
+
     updateFooter()
-    footer.after(1000, updateFooterLoop) # For updating system clock
+    sleepTime = (1000000 - datetime.now().microsecond)//1000
+    footer.after(sleepTime, updateFooterLoop)
 
 def updateTextScroll(_, pos):
-    global text, lines
     offset = text.yview()[0]
     lines.yview_moveto(offset)
 
@@ -282,17 +338,17 @@ def onKeyRelease(_):
     updateFooter()
     updateLines()
 
-# Binds setup
+# Binds config setup
 try:
     binds = cfgparser.readConfig('turtlebinds.txt')
 except Exception as error:
     writeToLog(f'Invalid binds! ({error})')
     binds = {}
 
-
+# Binds setup
 def createBindings():
-    global root, logMessage
-
+    text.bind('<ButtonRelease-1>', onKeyPress)
+    #text.bind('<Button-1>', onKeyPress)
     text.bind('<B1-Motion>', onKeyPress)
     text.bind('<KeyPress>', onKeyPress)
     text.bind('<KeyRelease>', onKeyRelease)
@@ -304,12 +360,42 @@ def createBindings():
         except Exception as error:
             writeToLog(f'Invalid bind! ({error}), ignoring')
 
+initFunctions = [setupConfig, configureWidgets]
+mainFunctions = [initializeWidgets, createBindings]
 
 if __name__ == '__main__':
-    setupConfig()
-    configureWidgets()
-    initializeWidgets()
-    createBindings()
+    # Load plugins
+    if not isdir('Plugins'):
+        writeToLog('\'Plugins\\\' directory is not found!')
+    else:
+        for plugin in listdir('Plugins'):
+            pluginDirectory = join('Plugins', plugin)
+
+            if not isfile(pluginDirectory):
+                continue
+
+            try:
+                with open(pluginDirectory, 'r', encoding='utf-8') as pluginFile:
+                    compiledPlugin = compile(pluginFile.read(), plugin, 'exec')
+                exec(compiledPlugin)
+            except Exception as error:
+                writeToLog(f'Invalid plugin {plugin}! ({error})')
+            else:
+                print(f'Successfully loaded {plugin}')
+
+    # Call init functions
+    for function in initFunctions:
+        function()
+
+    # Remove extra line at line 0
+    updateLines()
+    lines.configure(state='normal')
+    lines.delete('1.0')
+    lines.configure(state='disabled')
+
+    # Call main functions
+    for function in mainFunctions:
+        function()
+
     updateFooterLoop()
-    
     root.mainloop()

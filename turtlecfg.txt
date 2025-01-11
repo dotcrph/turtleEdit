@@ -11,7 +11,7 @@ textFont = 'Consolas'
 textFontSize = 16
 textRelief = 'flat'
 
-@ Text cursor
+@ Caret
 insertColor = '#85CB33'
 insertWidth = 3
 
@@ -28,3 +28,6 @@ footerFg = '#000000'
 footerFont = 'Consolas'
 footerFontSize = 16
 footerRelief = 'flat'
+footerText = ['cursorPos', 'systemTime', 'openedFile', 'logMessage', 'appVersion']
+footerTextSeparator = ' | '
+footerTimeFormat = '%A %x %X' @ https://docs.python.org/3/library/datetime.html#strftime-and-strptime-format-codes
